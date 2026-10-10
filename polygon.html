@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>正 X 边形</title>
+<style>
+  html,body{margin:0;height:100%;background:#111;color:#eee;font:16px system-ui,sans-serif}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px}
+  canvas{background:#1b1b1b;border-radius:12px;width:min(600px,92vw,70vh);aspect-ratio:1}
+  .bar{display:flex;align-items:center;gap:14px;width:min(88vw,600px)}
+  input[type=range]{flex:1}
+  b{font-variant-numeric:tabular-nums;min-width:6em;text-align:right;color:#5b9bff}
+  button{background:#2f6feb;color:#fff;border:0;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:15px}
+  button:hover{background:#4a83f0}
+</style>
+<canvas id="c" width="600" height="600"></canvas>
+<div class="bar">
+  <input id="s" type="range" min="3" max="100" value="3">
+  <b id="n">正 3 边形</b>
+  <button id="p">▶ 播放</button>
+</div>
+<script>
+const c = document.getElementById('c'), g = c.getContext('2d');
+const s = document.getElementById('s'), n = document.getElementById('n');
+const S = 600; // 逻辑画布边长：绘制坐标恒定，不随 devicePixelRatio 变
+const X = new Float64Array(101), Y = new Float64Array(101); // 顶点复用，免得每帧新建数组触发 GC
+
+function draw() {
+  const k = window.devicePixelRatio || 1;      // 先按 DPR 定缓冲，再算几何
+  if (c.width !== Math.round(S * k)) c.width = c.height = Math.round(S * k);
+  const N = +s.value, R = S * 0.4, cx = S / 2, cy = S / 2;
+  g.setTransform(k, 0, 0, k, 0, 0);
+  g.clearRect(0, 0, S, S);
+
+  for (let i = 0; i < N; i++) {
+    const a = -Math.PI / 2 + i * 2 * Math.PI / N;
+    X[i] = cx + R * Math.cos(a);
+    Y[i] = cy + R * Math.sin(a);
+  }
+
+  g.beginPath();
+  for (let i = 0; i < N; i++) i ? g.lineTo(X[i], Y[i]) : g.moveTo(X[i], Y[i]);
+  g.closePath();
+  g.fillStyle = 'rgba(47,111,235,.12)';
+  g.fill();
+
+  // 每个角与其他所有角都连线：完全图 K_N。线数 ~N²，越多越糊，整体降透明度
+  g.strokeStyle = 'rgba(91,155,255,' + Math.min(0.6, 20 / N) + ')';
+  g.lineWidth = 1;
+  g.beginPath();
+  for (let i = 0; i < N; i++)
+    for (let j = i + 1; j < N; j++) {
+      g.moveTo(X[i], Y[i]);
+      g.lineTo(X[j], Y[j]);
+    }
+  g.stroke();
+
+  g.beginPath();
+  for (let i = 0; i < N; i++) i ? g.lineTo(X[i], Y[i]) : g.moveTo(X[i], Y[i]);
+  g.closePath();
+  g.strokeStyle = '#5b9bff';
+  g.lineWidth = 2;
+  g.stroke();
+
+  n.textContent = '正 ' + N + ' 边形 · ' + (N * (N - 1) / 2) + ' 条连线';
+}
+
+const p = document.getElementById('p');
+const nextN = v => +v >= +s.max ? +s.min : +v + 1;
+const STEP = 50; // 每条边停留毫秒，越小越快越顺
+let playing = false, raf = 0, last = 0, acc = 0;
+
+// 用 requestAnimationFrame 对齐屏幕刷新率，按累计时间推进边数；
+// setInterval 触发时机跟着主线程抖动，看起来就是一顿一顿的
+function loop(t) {
+  acc += t - last;
+  last = t;
+  while (acc >= STEP) {
+    acc -= STEP;
+    s.value = nextN(s.value);
+    draw();
+  }
+  raf = requestAnimationFrame(loop);
+}
+
+p.addEventListener('click', () => {
+  playing = !playing;
+  if (playing) {
+    last = performance.now();
+    acc = 0;
+    raf = requestAnimationFrame(loop);
+  } else {
+    cancelAnimationFrame(raf);
+  }
+  p.textContent = playing ? '⏸ 暂停' : '▶ 播放';
+});
+
+s.addEventListener('input', draw);
+window.addEventListener('resize', draw);
+draw();
+</script>
+</html>
